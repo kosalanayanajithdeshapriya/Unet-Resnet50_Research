@@ -242,24 +242,24 @@ To obtain a matched comparison, use identical eligible images and outer folds, h
 
 S1. Original U-Net metadata: D:/Reasearch/Unet/export/metadata.json
 
-S2. Fixed-split cross-model comparison: D:/Reasearch/Resnet50test/unet_vs_deeplabv3_comparison_v2.csv
+S2. Fixed-split cross-model comparison: D:/Reasearch/Resnet50test/results/unet_vs_deeplabv3_comparison_v2.csv
 
-S3. U-Net fixed-split pipeline predictions: D:/Reasearch/Unet/outputs/fusion_pipeline/full_pipeline_test_results.csv
+S3. U-Net fixed-split pipeline predictions: D:/Reasearch/Unet/results/fusion_pipeline/full_pipeline_test_results.csv
 
-S4. U-Net segmentation fold metrics: D:/Reasearch/Unet/outputs/cross_validation/unet_segmentation_cv_results.csv
+S4. U-Net segmentation fold metrics: D:/Reasearch/Unet/results/cross_validation/unet_segmentation_cv_results.csv
 
-S5. DeepLabV3 segmenter-only CV: D:/Reasearch/Resnet50test/checkpoints_segmentation/deeplabv3_kfold_cv_results.csv
+S5. DeepLabV3 segmenter-only CV: D:/Reasearch/Resnet50test/results/deeplabv3_kfold_cv_results.csv
 
-S6. DeepLabV3 full-pipeline CV: D:/Reasearch/Resnet50test/deeplabv3_pipeline_kfold_cv_results.csv
+S6. DeepLabV3 full-pipeline CV: D:/Reasearch/Resnet50test/results/deeplabv3_pipeline_kfold_cv_results.csv
 
-S7. DeepLabV3 training and CV notebook: D:/Reasearch/Resnet50test/leaf_segmentation.ipynb
+S7. DeepLabV3 training and CV notebook: D:/Reasearch/Resnet50test/notebooks/03_deeplabv3_segmentation_pipeline.ipynb
 
-S8. DeepLabV3 standalone pipeline recomputation: D:/Reasearch/Resnet50test/deeplabv3_pipeline_evaluation.ipynb
+S8. DeepLabV3 standalone pipeline recomputation: D:/Reasearch/Resnet50test/notebooks/05_deeplabv3_pipeline_evaluation.ipynb
 
-S9. U-Net CV notebook: D:/Reasearch/Unet/unet_cross_validation.ipynb
+S9. U-Net CV notebook: D:/Reasearch/Unet/notebooks/03_unet_cross_validation.ipynb
 
 S10. Earlier U-Net methods/results audit: D:/Reasearch/Unet/reports/research_workload_report.md
 
-S11. U-Net pipeline fold metrics: D:/Reasearch/Unet/outputs/cross_validation/fusion_pipeline_cv_results.csv
+S11. U-Net pipeline fold metrics: D:/Reasearch/Unet/results/cross_validation/fusion_pipeline_cv_results.csv
 
 Notebook cell numbers in this report are zero-based indices in the saved notebook JSON. Section 5 U-Net numerical tables use S11. The companion build_results_report.py regenerates the CSV-based calculations and both document formats. Some fixed-split values are explicitly transcribed from the identified saved notebook outputs. No external literature claims are required for this results-only report.

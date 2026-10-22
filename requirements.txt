@@ -10,3 +10,4 @@ tqdm
 ipywidgets
 scikit-learn
 seaborn
+python-docx

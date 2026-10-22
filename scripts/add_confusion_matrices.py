@@ -1,7 +1,7 @@
 """Add full-pipeline confusion matrices to Segmentation_Comparison_Report.docx.
 
 Sources for the three 160-image test-set matrices (Table 6 variants):
-  - U-Net (crop-aligned): recomputed from outputs/fusion_pipeline/full_pipeline_test_results.csv
+  - U-Net (crop-aligned): recomputed from results/fusion_pipeline/full_pipeline_test_results.csv
   - U-Net (native resize): Resnet50test/unet_pipeline_confusion_matrix.png (acc 0.7875)
   - DeepLabV3 (acc 0.8438 run used in Table 6): reconstructed from the saved
     classification_report in Resnet50test/unet_leaf_pipeline_comparison.ipynb (cell 24).
@@ -26,12 +26,12 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'reports'
 SRC_DOCX = Path(sys.argv[1]) if len(sys.argv) > 1 else Path.home() / 'Downloads/Segmentation_Comparison_Report.docx'
 OUT_DOCX = OUT / 'Segmentation_Comparison_Report_with_CM.docx'
-FIG = OUT / 'pipeline_confusion_matrices.png'
+FIG = ROOT / 'results' / 'pipeline_confusion_matrices.png'
 
 CLASSES = ['developing', 'flowering', 'fruiting', 'seeding']
 LABELS = ['Developing', 'Flowering', 'Fruiting', 'Seeding']
 
-with open(ROOT / 'outputs/fusion_pipeline/full_pipeline_test_results.csv', encoding='utf-8-sig') as f:
+with open(ROOT / 'results/fusion_pipeline/full_pipeline_test_results.csv', encoding='utf-8-sig') as f:
     preds = list(csv.DictReader(f))
 unet_crop = [[sum(r['true_stage'] == a and r['pred_stage'] == b for r in preds) for b in CLASSES] for a in CLASSES]
 
