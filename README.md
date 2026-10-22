@@ -1,137 +1,106 @@
-# Tomato Leaf Segmentation — U-Net (Branch 01)
+# Tomato Leaf Segmentation with U-Net — Branch 01 of the Growth-Stage Pipeline
 
-Binary leaf/background segmentation model for the **Tomato Plant Growth Stage Monitoring System**. This is Branch 01 of a dual-branch fusion architecture — it segments tomato leaves from RGB images and computes a **Leaf Pixel Fraction (LPF)** scalar, which is later fused with ResNet50 classification features (Branch 02) to predict the plant's growth stage.
+Research project (2026) on classifying tomato plant photos into four growth stages
+(**seeding, developing, flowering, fruiting**). This repository is the **U-Net segmentation branch**:
+a from-scratch U-Net separates leaves from background, and the result feeds a masked ResNet50 classifier.
 
-This repository is trained and evaluated **independently** of the ResNet50 and fusion projects. It exports a standalone, self-contained artifact that downstream projects consume without any dependency on this codebase.
+## Research question
 
----
+Can a U-Net trained from scratch on 982 self-collected tomato images segment leaves well enough that the
+sequential **segment → mask → classify** pipeline predicts growth stage on new, unannotated photos — and how
+stable is that result across training splits (5-fold cross-validation)?
 
-## Overview
-
-| | |
-|---|---|
-| **Task** | Binary semantic segmentation (leaf vs. background) |
-| **Architecture** | U-Net, encoder-decoder with skip connections, trained from scratch (no pretrained backbone) |
-| **Framework** | PyTorch |
-| **Input** | 224 × 224 × 3 RGB image |
-| **Output** | 224 × 224 × 1 binary mask (sigmoid, threshold 0.5) |
-| **Downstream use** | Leaf Pixel Fraction (LPF) scalar feature for fusion classifier |
-
----
-
-## Dataset
-
-- 982 self-collected tomato plant images across four growth stages (seeding, developing, flowering, fruiting)
-- Annotated on Roboflow with polygon segmentation masks, exported in COCO format
-- Split into `train/` (687), `valid/` (135), `test/` (160) folders
-- COCO polygons converted to binary PNG masks prior to training (see `unet_pipeline.ipynb`, Task 2)
-- The authoritative train/valid/test split is recorded in [`export/lpf_full_dataset.csv`](export/lpf_full_dataset.csv) and should be treated as the single source of truth by any downstream project (e.g. the fusion pipeline) to avoid data leakage from re-splitting
-- Raw and processed image files are not committed to this repo (regeneratable, see [Reproducing training](#reproducing-training)) — only code and exported artifacts are versioned here
-
-## Architecture
-
-Custom U-Net (Ronneberger et al.), `base_channels=32`:
+## Pipeline
 
 ```
-INPUT        224 × 224 × 3 RGB image
-ENC 1        Conv → Conv → MaxPool   [32 filters]
-ENC 2        Conv → Conv → MaxPool   [64 filters]
-ENC 3        Conv → Conv → MaxPool   [128 filters]
-ENC 4        Conv → Conv → MaxPool   [256 filters]
-BOTTLENECK   Conv → Conv             [512 filters]
-DEC 4        UpSample + Skip 4 → Conv → Conv   [256 filters]
-DEC 3        UpSample + Skip 3 → Conv → Conv   [128 filters]
-DEC 2        UpSample + Skip 2 → Conv → Conv   [64 filters]
-DEC 1        UpSample + Skip 1 → Conv → Conv   [32 filters]
-OUTPUT       Conv(1) + Sigmoid → binary mask
+photo ──► U-Net (leaf vs. background) ──► black out background ──► masked ResNet50 ──► growth stage
+              │
+              └──► Leaf Pixel Fraction (LPF) = leaf pixels / total pixels
 ```
 
-7.77M parameters total.
+## Key results
 
-**Loss:** combined Binary Cross-Entropy + Dice Loss (0.5 / 0.5), to balance pixel-level accuracy with mask overlap under leaf/background class imbalance.
+All numbers are computed from the files in [`results/`](results) (test set = 160 held-out images).
 
-**Augmentation:** random horizontal flip, vertical flip, and 90°-multiple rotation, applied identically to image and mask.
-
-## Results
-
-Trained for 60 epochs (Adam, lr=1e-4, `ReduceLROnPlateau` on validation Dice), best checkpoint selected by validation Dice score (epoch 58/60).
-
-| Metric | Validation | Test (held out) |
+| Experiment | Result | Source |
 |---|---|---|
-| Dice score | 0.8127 | 0.7572 |
-| IoU | 0.7241 | 0.6650 |
+| U-Net segmentation, fixed split — Dice / IoU (mean per image) | 0.757 / 0.665 | `results/test_set_per_image_scores.csv` |
+| U-Net segmentation, fixed split — leaf F1 (mean per image) | 0.785 | `results/test_set_pixel_classification_metrics.csv` |
+| U-Net segmentation, 5-fold CV — leaf F1 on fixed test set | 0.773 ± 0.008 | `results/cross_validation/unet_segmentation_cv_results.csv` |
+| U-Net segmentation, 5-fold CV — pixel accuracy | 92.8% ± 0.5% | same |
+| Full pipeline, fixed split — accuracy | 89.4% (143/160) | `results/fusion_pipeline/full_pipeline_test_results.csv` |
+| Full pipeline, 5 fold-specific U-Nets — accuracy | 85.6% ± 2.4% | `results/cross_validation/fusion_pipeline_cv_results.csv` |
+| Full pipeline, 5 fold-specific U-Nets — macro F1 | 0.844 ± 0.024 | same |
 
-Per-growth-stage test Dice/IoU (see `export/metadata.json` for full detail):
+Per-stage results on the fixed split:
 
-| Stage | Dice | IoU | n |
-|---|---|---|---|
-| seeding | 0.858 | 0.776 | 38 |
-| developing | 0.774 | 0.687 | 41 |
-| flowering | 0.729 | 0.631 | 60 |
-| fruiting | 0.625 | 0.519 | 21 |
+| Stage | Dice | IoU | Pipeline recall | n |
+|---|---|---|---|---|
+| seeding | 0.857 | 0.776 | 100.0% | 38 |
+| developing | 0.774 | 0.687 | 95.1% | 41 |
+| flowering | 0.729 | 0.631 | 85.0% | 60 |
+| fruiting | 0.625 | 0.519 | 71.4% | 21 |
 
-`fruiting` is consistently the weakest stage — smallest class (21 test images) and leaves are frequently occluded by fruit.
+`fruiting` is the weakest stage (smallest class, leaves occluded by fruit); most pipeline errors are
+flowering ↔ fruiting confusions. Mean LPF is 0.24 (developing), 0.19 (flowering), 0.14 (fruiting) and
+0.03 (seeding) (`results/lpf_results.csv`).
 
-> Segmentation quality is evaluated relative to its purpose — producing a reliable LPF scalar for the fusion classifier — not as a standalone segmentation benchmark.
+± values are sample standard deviations across the 5 folds. The fold U-Nets share one fixed classifier and the
+same 160-image test set, so the CV spread reflects segmenter variability only. Full tables, the DeepLabV3
+comparison and caveats are in
+[reports/segmentation_and_pipeline_results_report.md](reports/segmentation_and_pipeline_results_report.md).
 
-## Repository structure
+## Repository layout
 
 ```
 .
-├── unet_pipeline.ipynb             training, evaluation, and LPF extraction (single notebook, PyTorch)
-├── checkpoints/                    unet_best.pth / unet_final.pth (full training state dicts)
-├── outputs/                        test-set scores, training curves, qualitative examples
-├── export/                         standalone, versioned model artifacts (see below)
-│   ├── unet_tomato_final.pth       state_dict only, no pickled model object
-│   ├── metadata.json               architecture, I/O shapes, normalization, threshold, metrics
-│   ├── unet_lpf_extractor.py       standalone loader — no dependency on training code
-│   └── lpf_full_dataset.csv        filename, growth_stage, split, lpf — for all 982 images
-├── requirements.txt
-└── README.md
+├── notebooks/    Training & evaluation notebooks, numbered in the order they were built
+├── scripts/      Report / figure builders
+├── results/      Metrics (CSV) and figures produced by the notebooks
+├── reports/      Written results (md / docx / pdf)
+├── export/       Standalone U-Net package: metadata.json, lpf_full_dataset.csv, unet_lpf_extractor.py
+├── docs/         Per-notebook documentation (NOTEBOOKS.md)
+└── requirements.txt
 ```
 
-`tomato final dataset/` (raw Roboflow export) and `processed/` (merged images + converted masks) are used locally during training but are not committed — see [Reproducing training](#reproducing-training).
+Not tracked in git (too large; regenerate with the notebooks): `checkpoints/`, `export/*.pth`,
+`tomato final dataset/`, `processed/`.
 
-## Using the exported model
+## Notebooks
 
-The `export/` folder is self-contained and can be copied into another project (e.g. the fusion pipeline) without any dependency on this repo's training code.
+| # | Notebook | Trains | Purpose |
+|---|---|---|---|
+| 01 | [01_unet_pipeline.ipynb](notebooks/01_unet_pipeline.ipynb) | U-Net | COCO → masks, training, test evaluation, LPF extraction |
+| 02 | [02_unet_pipeline_v2.ipynb](notebooks/02_unet_pipeline_v2.ipynb) | U-Net | Notebook 01 plus a pixel confusion matrix / precision-recall-F1 cell |
+| 03 | [03_unet_cross_validation.ipynb](notebooks/03_unet_cross_validation.ipynb) | 5 × U-Net | Segmentation CV and fold-wise full-pipeline CV |
+| 04 | [04_unet_resnet_fusion_pipeline.ipynb](notebooks/04_unet_resnet_fusion_pipeline.ipynb) | — | End-to-end U-Net → masked ResNet50 evaluation |
 
-```python
-from unet_lpf_extractor import load_unet, compute_lpf, compute_lpf_batch
+Details: [docs/NOTEBOOKS.md](docs/NOTEBOOKS.md).
 
-# Load the trained model
-model = load_unet("export/unet_tomato_final.pth")
-
-# Compute LPF for a single image — works on ANY image, annotated or not
-lpf, mask = compute_lpf(model, "path/to/image.jpg")
-print(lpf)  # float in [0, 1]
-
-# Compute LPF for a whole directory and save results to CSV
-compute_lpf_batch(model, "path/to/images/", output_csv_path="lpf_output.csv")
-```
-
-**Note:** annotation is only required during training. At inference time, U-Net predicts its own segmentation mask, so this works on completely new, unannotated images.
-
-## Reproducing training
+## Reproducing
 
 ```bash
 pip install -r requirements.txt
+jupyter lab notebooks/
 ```
 
-Place the Roboflow COCO export under `tomato final dataset/{train,valid,test}/{fruiting,flowering,developing,seeding}/`, each split folder containing a shared `_annotations.coco.json`. Then open and run `unet_pipeline.ipynb` top to bottom — Task 2 converts the COCO polygons into merged `processed/{split}/images` + `masks` folders before training starts.
+1. Place the Roboflow COCO export under `tomato final dataset/{train,valid,test}/{fruiting,flowering,developing,seeding}/`.
+2. Each notebook sets its root in the config cell (`BASE_DIR` / `UNET_PROJECT_ROOT`, currently
+   `d:/Reasearch/Unet`) — change it to your local clone path.
+3. Run notebooks 01 → 04 in order. Outputs go to `results/`; checkpoints to `checkpoints/`.
+4. Notebooks 03 (Part B) and 04 also need the masked ResNet50 checkpoint `checkpoints_masked/resnet50_masked_best.pt`
+   and the test images from the sibling `Resnet50test` project (`d:/Reasearch/Resnet50test`).
+5. Copy the final weights to `export/unet_tomato_final.pth` before running notebook 04.
+6. Rebuild reports: `python scripts/build_results_report.py` (needs the sibling `Resnet50test` repo checked out next to this one).
 
-Key dependencies: `torch`, `torchvision`, `opencv-python`, `pycocotools`.
+### Using the exported model
 
-## Known limitations / open work
-
-- Aggregate Dice (0.81 validation, 0.76 test) has room to improve; a pretrained encoder backbone (e.g. ResNet34 via `segmentation_models_pytorch`) is a candidate next iteration
-- Segmentation is weakest at the fruiting stage (occlusion by fruit, smallest class) — see per-stage breakdown in `export/metadata.json`
-- This repo's train/valid/test split is enforced via `lpf_full_dataset.csv`; a data-leakage audit across the broader fusion project is separate, ongoing work
-
-## Part of
-
-This repository is Branch 01 of the [Tomato Plant Growth Stage Monitoring System](https://tomatoresearch.vercel.app/) research project. See also: ResNet50 classification branch, and the fusion project combining both branches.
+```python
+from unet_lpf_extractor import load_unet, compute_lpf
+model = load_unet("export/unet_tomato_final.pth")
+lpf, mask = compute_lpf(model, "path/to/image.jpg")
+```
 
 ## License
 
-[Add your license here]
+See [LICENSE](LICENSE).

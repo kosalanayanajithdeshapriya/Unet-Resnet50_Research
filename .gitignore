@@ -4,9 +4,19 @@
 tomato final dataset/
 processed/
 
-# Local scratch copy, not the canonical tracked notebook
-unet_pipeline_v2.ipynb
+# Model checkpoints (large binaries, regenerable from the notebooks)
+checkpoints/
+*.pth
+*.pt
 
+# Exported model weights (large binaries); the small export/ metadata, CSV and
+# loader script stay tracked
+export/*.pth
+
+# Python / Jupyter
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
+
+# Local tooling
+.claude/
